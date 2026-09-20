@@ -1,0 +1,16 @@
+{
+  "name": "Помощник приёма лекарств",
+  "short_name": "Лекарства",
+  "description": "Простой и надежный помощник напоминания о лекарствах для пожилых людей",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#1D4ED8",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

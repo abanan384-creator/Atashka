@@ -1,0 +1,1300 @@
+/* ==========================================================================
+   Senior Medication Assistant - Design System
+   Assistive Access Simplicity + Awwwards-level Polish
+   Strictly adheres to AGENTS.md, README.md, and ROADMAP.md
+   ========================================================================== */
+
+:root {
+  /* Color Palette: High-Contrast Dark & Electric Neon Lime (#64FF00) */
+  --color-bg: #000000;
+  --color-surface: #0E0E0E;
+  --color-surface-subtle: #171717;
+  --color-surface-hover: #222222;
+  --color-border: #262626;
+  --color-border-focus: #64FF00;
+
+  /* Typography Colors (WCAG AAA contrast) */
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #E2E8F0;
+  --color-text-muted: #94A3B8;
+  --color-text-inverse: #000000;
+
+  /* Semantic Brand & Action Accents - Vivid Neon Electric Lime Green (#64FF00) */
+  --color-neon-lime: #64FF00;
+  --color-neon-lime-hover: #5BF000;
+  --color-neon-lime-active: #4ECC00;
+  --color-neon-lime-border: #52D100;
+  --color-neon-lime-contrast: #000000;
+
+  --color-primary-cta: #64FF00;
+  --color-primary-cta-hover: #5BF000;
+  --color-primary-cta-active: #4ECC00;
+  --color-primary-light: #EBFEE5;
+
+  --color-snooze-bg: #1C1505;
+  --color-snooze-border: #D97706;
+  --color-snooze-text: #FBBF24;
+  --color-snooze-hover: #2B2008;
+
+  --color-schedule-bg: #0E1A10;
+  --color-schedule-border: #16401E;
+  --color-schedule-text: #64FF00;
+
+  --color-game-bg: #161226;
+  --color-game-border: #2D2447;
+  --color-game-text: #C4B5FD;
+
+  --color-status-confirmed: #64FF00;
+  --color-status-unknown: #FB923C;
+  --color-status-scheduled: #64FF00;
+  --color-status-snoozed: #FBBF24;
+
+  /* Typography Scales */
+  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-display: 'Plus Jakarta Sans', var(--font-family-base);
+
+  /* Radius & Elevation */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --radius-xl: 36px;
+  --radius-pill: 9999px;
+
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 8px 24px -4px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 16px 36px -8px rgba(15, 23, 42, 0.12);
+  --shadow-cta: 0 12px 28px -6px rgba(29, 78, 216, 0.35);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Global Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  min-height: 100%;
+  font-family: var(--font-family-base);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Safe Area Container */
+.app-viewport {
+  max-width: 640px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg);
+  position: relative;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.03);
+}
+
+/* Accessibility Focus States */
+button:focus-visible, a:focus-visible {
+  outline: 4px solid var(--color-border-focus);
+  outline-offset: 4px;
+}
+
+/* ==========================================================================
+   Top Header Bar (Discreet, Accessible, Calming)
+   ========================================================================== */
+.top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 10px;
+  background-color: var(--color-bg);
+}
+
+.header-time-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-time {
+  font-family: var(--font-family-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--color-text-primary);
+}
+
+.header-date {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon-button {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.icon-button:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.icon-button:active {
+  transform: scale(0.96);
+}
+
+.icon-button.active-mode {
+  background: #64FF00;
+  border-color: #52D100;
+  color: #000000;
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Registration & Senior Onboarding Flow (Mockup Match)
+   ========================================================================== */
+.register-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 32px 24px;
+  min-height: 100vh;
+  background-color: var(--color-bg);
+  max-width: 520px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.register-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 36px;
+}
+
+.register-pill-badge {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-lg);
+  background: #1A1A1A;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  border: 1px solid #2E2E2E;
+}
+
+.register-title {
+  font-family: var(--font-family-display);
+  font-size: 34px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.5px;
+  margin-bottom: 8px;
+  line-height: 1.15;
+}
+
+.register-subtitle {
+  font-size: 19px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+
+.register-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.register-label {
+  font-size: 20px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.register-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #161616;
+  border: 2px solid #2C2C2C;
+  border-radius: var(--radius-lg);
+  padding: 0 16px;
+  transition: border-color var(--transition-fast);
+}
+
+.register-input-wrapper:focus-within {
+  border-color: #64FF00;
+  box-shadow: 0 0 0 2px rgba(100, 255, 0, 0.2);
+}
+
+.register-input-icon {
+  color: #94A3B8;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.register-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 24px;
+  font-weight: 700;
+  color: #FFFFFF;
+  padding: 20px 8px;
+  font-family: inherit;
+}
+
+.btn-register-primary {
+  width: 100%;
+  min-height: 72px;
+  background: #64FF00;
+  color: #000000;
+  font-size: 20px;
+  font-weight: 800;
+  border-radius: var(--radius-pill);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 10px 25px -4px rgba(100, 255, 0, 0.4);
+  transition: all var(--transition-fast);
+  font-family: var(--font-family-display);
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.btn-register-primary:hover {
+  background: #5BF000;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -4px rgba(100, 255, 0, 0.5);
+}
+
+.btn-register-primary:active {
+  background: #4ECC00;
+  transform: translateY(2px) scale(0.99);
+}
+
+.register-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 10px 0;
+  color: #64748B;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.register-divider::before,
+.register-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #262626;
+}
+
+.register-divider span {
+  padding: 0 12px;
+}
+
+.btn-register-qr-card {
+  width: 100%;
+  min-height: 72px;
+  background: #141414;
+  border: 1px solid #262626;
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  color: #FFFFFF;
+  transition: all var(--transition-fast);
+}
+
+.btn-register-qr-card:hover {
+  background: #1F1F1F;
+  border-color: #383838;
+}
+
+.btn-register-qr-text {
+  font-size: 19px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.btn-register-qr-icon {
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* SMS Code Styles */
+.register-sms-hint {
+  font-size: 16px;
+  color: #94A3B8;
+  line-height: 1.4;
+}
+
+.highlight-phone {
+  color: #64FF00;
+}
+
+.register-sms-code-box {
+  margin: 10px 0 6px;
+}
+
+.register-code-input {
+  width: 100%;
+  height: 76px;
+  background: #161616;
+  border: 2px solid #2C2C2C;
+  border-radius: var(--radius-lg);
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: 14px;
+  text-align: center;
+  color: #64FF00;
+  outline: none;
+  font-family: var(--font-family-display);
+}
+
+.register-code-input:focus {
+  border-color: #64FF00;
+  box-shadow: 0 0 0 2px rgba(100, 255, 0, 0.2);
+}
+
+.demo-sms-badge {
+  font-size: 14px;
+  color: #A3E635;
+  background: rgba(163, 230, 53, 0.1);
+  padding: 6px 12px;
+  border-radius: 8px;
+  width: fit-content;
+  margin-bottom: 6px;
+}
+
+.btn-register-secondary {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: color var(--transition-fast);
+}
+
+.btn-register-secondary:hover {
+  color: #FFFFFF;
+}
+
+.register-error-text {
+  color: #EF4444;
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* QR Scanner View */
+.register-qr-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.qr-viewfinder-card {
+  background: #141414;
+  border: 2px dashed #333333;
+  border-radius: var(--radius-xl);
+  padding: 36px 20px;
+  text-align: center;
+}
+
+.qr-viewfinder {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.qr-laser-line {
+  width: 180px;
+  height: 3px;
+  background: #64FF00;
+  box-shadow: 0 0 12px #64FF00;
+  border-radius: 2px;
+  animation: scanLaser 1.5s infinite alternate ease-in-out;
+}
+
+@keyframes scanLaser {
+  0% { transform: translateY(-30px); opacity: 0.6; }
+  100% { transform: translateY(30px); opacity: 1; }
+}
+
+.qr-camera-icon {
+  color: #64FF00;
+}
+
+.qr-scan-instruction {
+  font-size: 17px;
+  color: #E2E8F0;
+  font-weight: 600;
+}
+
+.qr-success-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.qr-success-icon {
+  color: #64FF00;
+}
+
+.qr-success-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #FFFFFF;
+}
+
+.qr-success-sub {
+  font-size: 15px;
+  color: #94A3B8;
+}
+
+/* ==========================================================================
+   Home Screen (Locked Rule: EXACTLY 3 PRIMARY ACTIONS)
+   1. ПРИНЯТЬ ТАБЛЕТКИ
+   2. РАСПИСАНИЕ ПРИЁМА ЛЕКАРСТВ (Следующий приём: [time])
+   3. ИГРА
+   ========================================================================== */
+.home-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 20px;
+  gap: 20px;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* Main Action 1: ПРИНЯТЬ ТАБЛЕТКИ (Primary Super-CTA) */
+.btn-primary-intake {
+  width: 100%;
+  min-height: 120px;
+  background: #64FF00;
+  color: #000000;
+  border: 2px solid #52D100;
+  border-radius: var(--radius-xl);
+  padding: 24px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  cursor: pointer;
+  box-shadow: 0 12px 28px -6px rgba(100, 255, 0, 0.45);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+  text-align: left;
+}
+
+.btn-primary-intake:hover {
+  background: #5BF000;
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -6px rgba(100, 255, 0, 0.55);
+}
+
+.btn-primary-intake:active {
+  background: #4ECC00;
+  transform: translateY(2px) scale(0.99);
+}
+
+.btn-intake-icon-wrap {
+  width: 72px;
+  height: 72px;
+  background: #000000;
+  color: #64FF00;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-intake-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.btn-intake-title {
+  font-family: var(--font-family-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  line-height: 1.15;
+  color: #000000;
+}
+
+.btn-intake-sub {
+  font-size: 17px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Main Action 2: РАСПИСАНИЕ ПРИЁМА ЛЕКАРСТВ (Vibrant Yellow from mockup) */
+.btn-schedule-action {
+  width: 100%;
+  min-height: 120px;
+  background: #FFEB00;
+  color: #000000;
+  border: none;
+  border-radius: var(--radius-xl);
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  cursor: pointer;
+  box-shadow: 0 10px 28px -4px rgba(255, 235, 0, 0.4);
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.btn-schedule-action:hover {
+  background: #F5E000;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px -4px rgba(255, 235, 0, 0.5);
+}
+
+.btn-schedule-action:active {
+  background: #E5D200;
+  transform: translateY(2px) scale(0.99);
+}
+
+.btn-schedule-icon-wrap {
+  width: 68px;
+  height: 68px;
+  background: rgba(0, 0, 0, 0.08);
+  color: #000000;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-schedule-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.btn-schedule-title {
+  font-family: var(--font-family-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: #000000;
+  line-height: 1.18;
+}
+
+.btn-schedule-next-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #000000;
+  opacity: 0.92;
+}
+
+.next-time-highlight {
+  color: #000000;
+  font-weight: 800;
+  font-size: 17px;
+}
+
+/* Main Action 3: ИГРА (Electric Blue from mockup) */
+.btn-game-action {
+  width: 100%;
+  min-height: 120px;
+  background: #0052FF;
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--radius-xl);
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  cursor: pointer;
+  box-shadow: 0 10px 28px -4px rgba(0, 82, 255, 0.4);
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.btn-game-action:hover {
+  background: #0047E0;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px -4px rgba(0, 82, 255, 0.5);
+}
+
+.btn-game-action:active {
+  background: #003CC0;
+  transform: translateY(2px) scale(0.99);
+}
+
+.btn-game-icon-wrap {
+  width: 68px;
+  height: 68px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-game-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.btn-game-title {
+  font-family: var(--font-family-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFFFFF;
+  line-height: 1.18;
+}
+
+.btn-game-sub {
+  font-size: 17px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* ==========================================================================
+   Schedule Screen
+   ========================================================================== */
+.screen-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 32px;
+  gap: 20px;
+}
+
+.screen-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.btn-back {
+  min-height: 56px;
+  padding: 12px 20px;
+  border-radius: var(--radius-pill);
+  border: 2px solid #2A2A2A;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 18px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.btn-back:hover {
+  background: var(--color-surface-hover);
+  border-color: #3F3F3F;
+}
+
+.screen-title {
+  font-family: var(--font-family-display);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.schedule-card {
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.schedule-card.is-next {
+  border-color: #64FF00;
+  box-shadow: 0 4px 20px rgba(100, 255, 0, 0.2);
+  background: #141414;
+}
+
+.schedule-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.schedule-time-badge {
+  font-family: var(--font-family-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.status-badge.confirmed_taken {
+  background: #122814;
+  color: #64FF00;
+  border: 1px solid #225526;
+}
+
+.status-badge.scheduled {
+  background: #181818;
+  color: #E2E8F0;
+  border: 1px solid #333333;
+}
+
+.status-badge.snoozed {
+  background: #2E2208;
+  color: #FBBF24;
+  border: 1px solid #573F0A;
+}
+
+.status-badge.confirmation_unknown {
+  background: #331A14;
+  color: #FB923C;
+  border: 1px solid #632C1E;
+}
+
+.schedule-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.schedule-med-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.schedule-med-dosage {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.schedule-med-notes {
+  font-size: 15px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* ==========================================================================
+   Reminder Modal Overlay (Priority 1 Screen)
+   ========================================================================== */
+.reminder-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.reminder-modal {
+  width: 100%;
+  max-width: 540px;
+  background: #0E0E0E;
+  border-radius: var(--radius-xl);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 3px solid #2A2A2A;
+}
+
+.reminder-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.reminder-icon-pill {
+  width: 76px;
+  height: 76px;
+  border-radius: var(--radius-pill);
+  background: #181818;
+  color: #64FF00;
+  border: 1px solid #2A2A2A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.reminder-icon-pill.alarm-ringing {
+  animation: alarmRing 1.2s ease-in-out infinite;
+}
+
+@keyframes alarmRing {
+  0% { transform: rotate(0deg) scale(1); }
+  10% { transform: rotate(14deg) scale(1.05); }
+  20% { transform: rotate(-14deg) scale(1.05); }
+  30% { transform: rotate(10deg) scale(1.03); }
+  40% { transform: rotate(-10deg) scale(1.03); }
+  50% { transform: rotate(5deg) scale(1); }
+  60% { transform: rotate(-5deg) scale(1); }
+  70% { transform: rotate(0deg) scale(1); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.reminder-title {
+  font-family: var(--font-family-display);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+/* Repeated Reminder Safe Copy Alert */
+.repeated-reminder-banner {
+  background: #2A1D05;
+  border: 2px solid #D97706;
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  text-align: center;
+  color: #FBBF24;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.medication-detail-card {
+  background: #141414;
+  border: 2px solid #262626;
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.medication-name-highlight {
+  font-family: var(--font-family-display);
+  font-size: 28px;
+  font-weight: 800;
+  color: #64FF00;
+}
+
+.medication-dosage-highlight {
+  font-size: 20px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.medication-instruction-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: #94A3B8;
+  margin-top: 4px;
+}
+
+/* Reminder Action Buttons */
+.reminder-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.btn-confirm-taken {
+  width: 100%;
+  min-height: 84px;
+  background: #64FF00;
+  color: #000000;
+  border: 2px solid #52D100;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-family-display);
+  font-size: 26px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -4px rgba(100, 255, 0, 0.4);
+  transition: all var(--transition-fast);
+}
+
+.btn-confirm-taken:hover {
+  background: #5BF000;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -4px rgba(100, 255, 0, 0.5);
+}
+
+.btn-confirm-taken:active {
+  background: #4ECC00;
+  transform: translateY(2px) scale(0.99);
+}
+
+.btn-snooze-action {
+  width: 100%;
+  min-height: 72px;
+  background: #1C1505;
+  color: #FBBF24;
+  border: 2px solid #D97706;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-family-display);
+  font-size: 21px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-snooze-action:hover {
+  background: #2B2008;
+  border-color: #F59E0B;
+  transform: translateY(-1px);
+}
+
+.btn-snooze-action:active {
+  transform: translateY(2px) scale(0.99);
+}
+
+/* ==========================================================================
+   Game Screen (Senior Friendly Pair Match, with reminder pause state)
+   ========================================================================== */
+.game-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.game-header-card {
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.game-score-display {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+
+.game-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.game-card-tile {
+  aspect-ratio: 1;
+  background: #141414;
+  border: 3px solid #262626;
+  border-radius: var(--radius-lg);
+  font-size: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.game-card-tile:hover {
+  border-color: #404040;
+  transform: scale(1.02);
+}
+
+.game-card-tile.matched {
+  background: #142814;
+  border-color: #64FF00;
+  cursor: default;
+}
+
+.game-card-tile.flipped {
+  border-color: #64FF00;
+  background: #1C1C1C;
+}
+
+.game-resume-notice {
+  background: #2A1D05;
+  border: 2px solid #D97706;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #FBBF24;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Discrete Reviewer Demo Controls Panel
+   ========================================================================== */
+.demo-banner {
+  background: #0E0E0E;
+  color: #F8FAFC;
+  border: 1px solid #262626;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  margin: 8px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.demo-banner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.demo-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-demo-pill {
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.btn-demo-pill:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.btn-demo-pill.active {
+  background: #64FF00;
+  border-color: #52D100;
+  color: #000000;
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Phase 10: Accessibility Modifiers (Font Scale, High Contrast, Reduced Motion)
+   ========================================================================== */
+
+/* Large Font Scale (+30% magnification) */
+[data-font-size="large"] {
+  font-size: 19px;
+}
+
+[data-font-size="large"] .header-time {
+  font-size: 32px;
+}
+
+[data-font-size="large"] .btn-intake-title {
+  font-size: 30px;
+}
+
+[data-font-size="large"] .btn-schedule-title,
+[data-font-size="large"] .btn-game-title {
+  font-size: 26px;
+}
+
+[data-font-size="large"] .reminder-title {
+  font-size: 34px;
+}
+
+[data-font-size="large"] .medication-name-highlight {
+  font-size: 34px;
+}
+
+[data-font-size="large"] .btn-confirm-taken {
+  min-height: 96px;
+  font-size: 30px;
+}
+
+[data-font-size="large"] .btn-snooze-action {
+  min-height: 84px;
+  font-size: 24px;
+}
+
+/* High Contrast Mode (WCAG AAA) */
+[data-high-contrast="true"] {
+  --color-bg: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #F1F5F9;
+  --color-border: #000000;
+  --color-border-focus: #000000;
+  --color-text-primary: #000000;
+  --color-text-secondary: #000000;
+  --color-text-muted: #1E293B;
+  --color-primary-cta: #002B99;
+}
+
+[data-high-contrast="true"] .btn-schedule-action,
+[data-high-contrast="true"] .btn-game-action,
+[data-high-contrast="true"] .schedule-card,
+[data-high-contrast="true"] .btn-back,
+[data-high-contrast="true"] .reminder-modal {
+  border: 3px solid #000000 !important;
+  box-shadow: none !important;
+}
+
+[data-high-contrast="true"] .btn-primary-intake {
+  background: #002B99 !important;
+  border: 4px solid #000000 !important;
+}
+
+[data-high-contrast="true"] .btn-confirm-taken {
+  background: #065F46 !important;
+  border: 4px solid #000000 !important;
+}
+
+[data-high-contrast="true"] .btn-snooze-action {
+  background: #FEF08A !important;
+  color: #000000 !important;
+  border: 3px solid #000000 !important;
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Voice Speaking Pulse Indicator */
+.speaking-indicator-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #64FF00;
+  border: 1px solid #52D100;
+  color: #000000;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 800;
+  animation: pulseGlow 1.5s infinite;
+}
+
+@keyframes pulseGlow {
+  0% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.9; }
+}
+
+/* Keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
