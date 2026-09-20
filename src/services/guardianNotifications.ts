@@ -10,6 +10,7 @@ export type GuardianNotificationType =
 
 export interface GuardianNotificationPayload {
   guardianLinkId?: string;
+  userId?: string;
   type: GuardianNotificationType;
   seniorName?: string;
   medication?: string;
@@ -23,10 +24,35 @@ export interface GuardianNotificationResult {
   error?: string;
 }
 
+export interface GuardianInviteResult {
+  guardianLinkId: string;
+  pairingToken: string;
+  telegramUrl: string;
+  alreadyConnected?: boolean;
+  telegramFirstName?: string;
+  telegramUsername?: string;
+}
+
+export interface GuardianStatusResult {
+  guardianLinkId?: string;
+  connected: boolean;
+  telegramFirstName?: string;
+  telegramUsername?: string;
+  connectedAt?: string;
+  pairingToken?: string;
+}
+
+const SUPABASE_URL =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
+  "https://znsjrujhsadiywsimywf.supabase.co";
+
+const SUPABASE_ANON_KEY =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_ANON_KEY) || "";
+
 /**
  * Resolves the currently active guardian link ID dynamically.
- * Prioritizes local user profile / local storage, then deployment environment variable.
- * No hardcoded test UUIDs in production flows.
+ * Prioritizes local user profile and local storage.
+ * NO HARDCODED IDS OR TEST ENVIRONMENT FALLBACKS.
  */
 export function getActiveGuardianLinkId(): string | null {
   try {
@@ -53,20 +79,15 @@ export function getActiveGuardianLinkId(): string | null {
     // Storage access fallback
   }
 
-  const envId = import.meta.env.VITE_GUARDIAN_LINK_ID;
-  if (envId && typeof envId === "string" && envId.trim()) {
-    return envId.trim();
-  }
-
   return null;
 }
 
 /**
- * Persists an active guardian link ID locally
+ * Persists an active guardian link ID locally.
  */
 export function setActiveGuardianLinkId(id: string | null): void {
   try {
-    if (id && id.trim() && id !== "none") {
+    if (id && id.trim() && id !== "none" && id !== "null") {
       localStorage.setItem(STORAGE_KEYS.GUARDIAN_LINK_ID, id.trim());
     } else {
       localStorage.setItem(STORAGE_KEYS.GUARDIAN_LINK_ID, "none");
@@ -91,54 +112,129 @@ function getSeniorName(): string {
 }
 
 /**
- * Optional status check to verify if the guardian is connected before dispatching.
+ * Retrieves the current senior user's ID dynamically from stored profile.
  */
-export async function checkGuardianConnection(
-  customLinkId?: string
-): Promise<{ connected: boolean; guardian?: Record<string, unknown> | null }> {
-  const linkId = customLinkId || getActiveGuardianLinkId();
-  if (!linkId) {
-    return { connected: false, guardian: null };
+export function getSeniorUserId(): string | null {
+  try {
+    const profileStr = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    if (profileStr) {
+      const profile = JSON.parse(profileStr);
+      if (profile.id && typeof profile.id === "string") {
+        return profile.id.trim();
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Requests creation of a real guardian invitation from Supabase Edge Function `create-guardian-invite`.
+ * Generates a unique, URL-safe Telegram pairing link:
+ * https://t.me/CareTrackGuardianBot?start={pairingToken}
+ */
+export async function createGuardianInvite(
+  userId: string,
+  seniorName: string,
+  replace: boolean = false
+): Promise<GuardianInviteResult> {
+  const url = `${SUPABASE_URL}/functions/v1/create-guardian-invite`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(SUPABASE_ANON_KEY ? { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+    },
+    body: JSON.stringify({
+      userId,
+      seniorName: seniorName.trim() || "Пользователь",
+      replace,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to create guardian invite (${res.status}): ${errText}`);
   }
+
+  const data: GuardianInviteResult = await res.json();
+  if (data.guardianLinkId) {
+    setActiveGuardianLinkId(data.guardianLinkId);
+  }
+
+  return data;
+}
+
+/**
+ * Queries the current live connection status of the guardian from Supabase Edge Function `create-guardian-invite`.
+ */
+export async function checkGuardianStatus(
+  guardianLinkId?: string,
+  userId?: string
+): Promise<GuardianStatusResult> {
+  const targetLinkId = guardianLinkId || getActiveGuardianLinkId();
+  const targetUserId = userId || getSeniorUserId();
+
+  if (!targetLinkId && !targetUserId) {
+    return { connected: false };
+  }
+
+  const queryParams = new URLSearchParams();
+  if (targetLinkId) queryParams.set("guardianLinkId", targetLinkId);
+  else if (targetUserId) queryParams.set("userId", targetUserId);
+
+  const url = `${SUPABASE_URL}/functions/v1/create-guardian-invite?${queryParams.toString()}`;
 
   try {
-    const { data, error } = await supabase
-      .from("guardian_links")
-      .select("id, senior_name, telegram_connected, telegram_username, telegram_first_name, connected_at")
-      .eq("id", linkId)
-      .maybeSingle();
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        ...(SUPABASE_ANON_KEY ? { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+      },
+    });
 
-    if (error || !data) {
-      return { connected: false, guardian: null };
+    if (!res.ok) {
+      return { connected: false };
     }
 
-    return {
-      connected: Boolean(data.telegram_connected),
-      guardian: data,
-    };
-  } catch {
-    return { connected: false, guardian: null };
+    const data: GuardianStatusResult = await res.json();
+
+    if (data.connected && data.guardianLinkId) {
+      setActiveGuardianLinkId(data.guardianLinkId);
+    }
+
+    return data;
+  } catch (err) {
+    console.warn("[GuardianNotifications] Error checking guardian status:", err);
+    return { connected: false };
   }
 }
+
+/**
+ * Backward compatibility alias for checkGuardianStatus
+ */
+export const checkGuardianConnection = checkGuardianStatus;
 
 /**
  * Core Guardian Notification Dispatcher.
  * Invokes the Supabase Edge Function 'notify-guardian'.
  *
- * SAFETY RULES:
+ * SAFETY & PRODUCT RULES:
  * 1. Guardian is strictly optional: if not connected, silently skips without throwing.
  * 2. Notification failures NEVER break medication functionality or block user flow.
- * 3. Never claims medication was "not taken" when confirmation is unknown.
+ * 3. Never routes by telegram username — only routes to verified `telegram_chat_id`.
+ * 4. Never claims medication was "not taken" when confirmation is unknown.
  */
 export async function notifyGuardian(
   payload: GuardianNotificationPayload
 ): Promise<GuardianNotificationResult> {
   const guardianLinkId = payload.guardianLinkId || getActiveGuardianLinkId();
+  const userId = payload.userId || getSeniorUserId() || undefined;
 
   // If no guardian link is configured, gracefully skip
-  if (!guardianLinkId) {
+  if (!guardianLinkId && !userId) {
     console.log(
-      `[GuardianNotifications] No guardian link ID configured for ${payload.type}. Silently skipping.`
+      `[GuardianNotifications] No guardian link configured for ${payload.type}. Silently skipping.`
     );
     return { ok: true, sent: false, skipped: true };
   }
@@ -146,7 +242,8 @@ export async function notifyGuardian(
   const seniorName = payload.seniorName || getSeniorName();
 
   const body: Record<string, unknown> = {
-    guardianLinkId,
+    guardianLinkId: guardianLinkId || undefined,
+    userId,
     type: payload.type,
     seniorName,
   };
@@ -160,7 +257,7 @@ export async function notifyGuardian(
 
   try {
     console.log(
-      `[GuardianNotifications] Dispatching '${payload.type}' for ${seniorName} to guardian ${guardianLinkId}...`
+      `[GuardianNotifications] Dispatching '${payload.type}' for ${seniorName} to guardian...`
     );
 
     const { data, error } = await supabase.functions.invoke("notify-guardian", {

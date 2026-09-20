@@ -36,9 +36,10 @@ export const ReminderModal: React.FC = () => {
   // Speak aloud when reminder activates
   useEffect(() => {
     if (activeReminderEvent && med) {
+      const dosageText = med.dosage ? ` ${med.dosage}.` : "";
       const phrase = isRepeated
         ? `Мы не получили подтверждение. ${userName ? `${userName}, вы` : "Вы"} уже приняли ${med.name}?`
-        : `${userName ? `${userName}, пора` : "Пора"} принять ${med.name}. ${med.dosage}.`;
+        : `${userName ? `${userName}, пора` : "Пора"} принять ${med.name}.${dosageText}`;
       speak(phrase);
     }
   }, [activeReminderEvent?.id, isRepeated]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -48,11 +49,9 @@ export const ReminderModal: React.FC = () => {
     if (activeReminderEvent && speechRecognitionService.isSupported()) {
       speechRecognitionService.startListening({
         onConfirm: () => {
-          speak("Принято голосом. Будьте здоровы!");
           confirmMedicationTaken(activeReminderEvent.id);
         },
         onSnooze: () => {
-          speak("Напомню через пять минут.");
           snoozeMedicationReminder(activeReminderEvent.id);
         },
       });
@@ -60,19 +59,17 @@ export const ReminderModal: React.FC = () => {
     return () => {
       speechRecognitionService.stop();
     };
-  }, [activeReminderEvent, confirmMedicationTaken, snoozeMedicationReminder, speak]);
+  }, [activeReminderEvent, confirmMedicationTaken, snoozeMedicationReminder]);
 
   if (!activeReminderEvent || !med) return null;
 
   const relationLabel = med.relationToFood ? FOOD_LABELS[med.relationToFood] : "";
 
   const handleConfirm = () => {
-    speak("Приём лекарства подтверждён! Будьте здоровы.");
     confirmMedicationTaken(activeReminderEvent.id);
   };
 
   const handleSnooze = () => {
-    speak("Хорошо, напомню через пять минут.");
     snoozeMedicationReminder(activeReminderEvent.id);
   };
 

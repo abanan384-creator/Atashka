@@ -28,29 +28,34 @@ Deno.serve(async (req) => {
 
     const {
       guardianLinkId,
+      userId,
       type,
       seniorName,
       medication,
       time,
     } = await req.json();
 
-    if (!guardianLinkId || !type) {
+    if ((!guardianLinkId && !userId) || !type) {
       return Response.json(
         {
-          error: "guardianLinkId and type are required",
+          error: "guardianLinkId or userId, and type are required",
         },
         { status: 400 }
       );
     }
 
-    const { data: guardian, error } = await supabase
+    let query = supabase
       .from("guardian_links")
-      .select(
-        "telegram_chat_id, telegram_connected"
-      )
-      .eq("id", guardianLinkId)
-      .eq("telegram_connected", true)
-      .maybeSingle();
+      .select("telegram_chat_id, telegram_connected")
+      .eq("telegram_connected", true);
+
+    if (guardianLinkId) {
+      query = query.eq("id", guardianLinkId);
+    } else if (userId) {
+      query = query.eq("user_id", userId).order("connected_at", { ascending: false }).limit(1);
+    }
+
+    const { data: guardian, error } = await query.maybeSingle();
 
     if (error) {
       console.error(error);

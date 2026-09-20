@@ -18,6 +18,8 @@ export interface LocalUserProfile {
   createdAt: string;
   onboardingCompleted: boolean;
   guardianLinkId?: string;
+  guardianConnected?: boolean;
+  guardianFirstName?: string;
 }
 
 export interface ParsedMedication {
@@ -59,8 +61,8 @@ export interface MedicationSchedule {
 export interface MedicationEvent {
   id: string;
   medicationId: string;
-  scheduledAt: string; // ISO string for dose date-time
-  timeString: string; // "08:00", "13:00", etc. for display
+  scheduledAt: string; // ISO 8601
+  timeString: string; // "08:00"
   status: MedicationEventStatus;
   snoozedUntil?: string; // ISO string when snoozed
   confirmedAt?: string; // ISO string when confirmed
@@ -70,6 +72,8 @@ export interface MedicationEvent {
 
 export type ActiveScreen =
   | "onboarding_name"
+  | "onboarding_guardian_choice"
+  | "onboarding_guardian_connect"
   | "onboarding_scan"
   | "onboarding_review"
   | "onboarding_success"

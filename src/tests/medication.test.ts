@@ -7,6 +7,9 @@ import {
   notifyGuardian,
   getActiveGuardianLinkId,
   setActiveGuardianLinkId,
+  createGuardianInvite,
+  checkGuardianStatus,
+  getSeniorUserId,
   type GuardianNotificationPayload,
 } from "../services/guardianNotifications";
 import { supabase } from "../services/supabaseClient";
@@ -548,6 +551,226 @@ describe("Senior Medication Assistant - Core Domain & Safety Rules", () => {
       });
 
       invokeSpy.mockRestore();
+    });
+  });
+
+  describe("End-to-End Dynamic Telegram Guardian Flow (Requirement 11)", () => {
+    beforeEach(() => {
+      localStorage.clear();
+      setActiveGuardianLinkId(null);
+      vi.restoreAllMocks();
+    });
+
+    it("ensures stable senior user profile ID is persisted without creating duplicate users", () => {
+      const stableId = "senior-uuid-stable-123";
+      const profile: LocalUserProfile = {
+        id: stableId,
+        name: "Татьяна Ивановна",
+        createdAt: "2026-09-20T10:00:00.000Z",
+        onboardingCompleted: false,
+      };
+      localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+
+      expect(getSeniorUserId()).toBe(stableId);
+
+      const retrieved = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_PROFILE)!);
+      expect(retrieved.id).toBe(stableId);
+      expect(retrieved.name).toBe("Татьяна Ивановна");
+    });
+
+    it("creates unique pairing token and telegramUrl for Senior A and distinct token for Senior B", async () => {
+      const globalFetchSpy = vi.spyOn(globalThis, "fetch");
+
+      // Senior A invite
+      globalFetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            guardianLinkId: "link-senior-a",
+            pairingToken: "gt_token_senior_a_111",
+            telegramUrl: "https://t.me/CareTrackGuardianBot?start=gt_token_senior_a_111",
+            alreadyConnected: false,
+          }),
+          { status: 200 }
+        )
+      );
+
+      const inviteA = await createGuardianInvite("senior-a-uuid", "Senior A");
+      expect(inviteA.guardianLinkId).toBe("link-senior-a");
+      expect(inviteA.pairingToken).toBe("gt_token_senior_a_111");
+      expect(inviteA.telegramUrl).toBe("https://t.me/CareTrackGuardianBot?start=gt_token_senior_a_111");
+
+      // Senior B invite
+      globalFetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            guardianLinkId: "link-senior-b",
+            pairingToken: "gt_token_senior_b_222",
+            telegramUrl: "https://t.me/CareTrackGuardianBot?start=gt_token_senior_b_222",
+            alreadyConnected: false,
+          }),
+          { status: 200 }
+        )
+      );
+
+      const inviteB = await createGuardianInvite("senior-b-uuid", "Senior B");
+      expect(inviteB.guardianLinkId).toBe("link-senior-b");
+      expect(inviteB.pairingToken).toBe("gt_token_senior_b_222");
+
+      // Verify no hardcoding or cross-user collision
+      expect(inviteA.pairingToken).not.toBe(inviteB.pairingToken);
+      expect(inviteA.guardianLinkId).not.toBe(inviteB.guardianLinkId);
+      expect(inviteA.telegramUrl).not.toBe(inviteB.telegramUrl);
+    });
+
+    it("monitors connection state and detects telegram_connected = true", async () => {
+      const globalFetchSpy = vi.spyOn(globalThis, "fetch");
+
+      // First check: not connected yet
+      globalFetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            guardianLinkId: "link-senior-a",
+            connected: false,
+          }),
+          { status: 200 }
+        )
+      );
+
+      const status1 = await checkGuardianStatus("link-senior-a");
+      expect(status1.connected).toBe(false);
+
+      // Second check: guardian pressed Start, webhook updated row
+      globalFetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            guardianLinkId: "link-senior-a",
+            connected: true,
+            telegramFirstName: "Алексей",
+            telegramUsername: "alex_guardian",
+            connectedAt: "2026-09-20T12:00:00.000Z",
+          }),
+          { status: 200 }
+        )
+      );
+
+      const status2 = await checkGuardianStatus("link-senior-a");
+      expect(status2.connected).toBe(true);
+      expect(status2.telegramFirstName).toBe("Алексей");
+      expect(getActiveGuardianLinkId()).toBe("link-senior-a");
+    });
+
+    it("strictly isolates notifications: Senior A routes only to Guardian A, Senior B only to Guardian B", async () => {
+      const invokeSpy = vi.spyOn(Object.getPrototypeOf(supabase.functions), "invoke").mockResolvedValue({
+        data: { ok: true, sent: true },
+        error: null,
+      });
+
+      // Event for Senior A
+      await notifyGuardian({
+        guardianLinkId: "link-senior-a",
+        userId: "senior-a-uuid",
+        type: "medication_taken",
+        seniorName: "Senior A",
+        medication: "Парацетамол",
+        time: "09:00",
+      });
+
+      expect(invokeSpy).toHaveBeenLastCalledWith("notify-guardian", {
+        body: {
+          guardianLinkId: "link-senior-a",
+          userId: "senior-a-uuid",
+          type: "medication_taken",
+          seniorName: "Senior A",
+          medication: "Парацетамол",
+          time: "09:00",
+        },
+      });
+
+      // Event for Senior B
+      await notifyGuardian({
+        guardianLinkId: "link-senior-b",
+        userId: "senior-b-uuid",
+        type: "medication_snoozed",
+        seniorName: "Senior B",
+        medication: "Аспирин",
+        time: "14:00",
+      });
+
+      expect(invokeSpy).toHaveBeenLastCalledWith("notify-guardian", {
+        body: {
+          guardianLinkId: "link-senior-b",
+          userId: "senior-b-uuid",
+          type: "medication_snoozed",
+          seniorName: "Senior B",
+          medication: "Аспирин",
+          time: "14:00",
+        },
+      });
+
+      // Verify invokeSpy was called twice with completely distinct payloads
+      expect(invokeSpy).toHaveBeenCalledTimes(2);
+      const call1 = invokeSpy.mock.calls[0] as [string, { body: { guardianLinkId?: string } }];
+      const call2 = invokeSpy.mock.calls[1] as [string, { body: { guardianLinkId?: string } }];
+      expect(call1[1].body.guardianLinkId).toBe("link-senior-a");
+      expect(call2[1].body.guardianLinkId).toBe("link-senior-b");
+    });
+
+    it("optional guardian flow: skipping guardian allows reminders without errors and notification silently skips", async () => {
+      setActiveGuardianLinkId(null);
+      localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+
+      const invokeSpy = vi.spyOn(Object.getPrototypeOf(supabase.functions), "invoke");
+
+      const result = await notifyGuardian({
+        type: "medication_taken",
+        seniorName: "Самостоятельный пользователь",
+        medication: "Витамин D3",
+        time: "08:00",
+      });
+
+      expect(invokeSpy).not.toHaveBeenCalled();
+      expect(result.ok).toBe(true);
+      expect(result.sent).toBe(false);
+      expect(result.skipped).toBe(true);
+    });
+
+    it("reconnect/replace flow: honors existing connection unless replace = true is explicitly requested", async () => {
+      const globalFetchSpy = vi.spyOn(globalThis, "fetch");
+
+      // Existing connection check
+      globalFetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            guardianLinkId: "link-existing-1",
+            alreadyConnected: true,
+            telegramFirstName: "Мария",
+            telegramUrl: "https://t.me/CareTrackGuardianBot?start=gt_existing",
+          }),
+          { status: 200 }
+        )
+      );
+
+      const existingInvite = await createGuardianInvite("senior-uuid-1", "Анна", false);
+      expect(existingInvite.alreadyConnected).toBe(true);
+      expect(existingInvite.guardianLinkId).toBe("link-existing-1");
+
+      // Explicit replace requested ("ПОДКЛЮЧИТЬ ДРУГОГО")
+      globalFetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            guardianLinkId: "link-new-2",
+            alreadyConnected: false,
+            pairingToken: "gt_new_token_333",
+            telegramUrl: "https://t.me/CareTrackGuardianBot?start=gt_new_token_333",
+          }),
+          { status: 200 }
+        )
+      );
+
+      const replacedInvite = await createGuardianInvite("senior-uuid-1", "Анна", true);
+      expect(replacedInvite.alreadyConnected).toBe(false);
+      expect(replacedInvite.guardianLinkId).toBe("link-new-2");
+      expect(replacedInvite.pairingToken).toBe("gt_new_token_333");
     });
   });
 });

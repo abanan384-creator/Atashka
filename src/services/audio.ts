@@ -1,8 +1,18 @@
 /**
- * Audio guidance service using Web Speech API & Web Audio API
- * Provides calm, clear AI vocal prompts and tactile audio feedback for elderly users.
+ * Audio guidance service using ElevenLabs AI Voice (via Supabase Edge Function `medication-voice`)
+ * with graceful fallback to Web Speech API & tactile Web Audio API sound effects.
+ * Provides calm, clear vocal prompts and tactile feedback for elderly users.
  * Offline-first and respectful of user's sound preferences.
  */
+
+const SUPABASE_URL =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
+  "https://znsjrujhsadiywsimywf.supabase.co";
+
+const SUPABASE_ANON_KEY =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_ANON_KEY) || "";
+
+const VOICE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/medication-voice`;
 
 export interface VoiceService {
   speak(text: string): Promise<void>;
@@ -21,6 +31,12 @@ class AudioService implements VoiceService {
   private voices: SpeechSynthesisVoice[] = [];
   private onSpeakingCallback: ((speaking: boolean) => void) | null = null;
 
+  // ElevenLabs playback & caching state
+  private currentAudio: HTMLAudioElement | null = null;
+  private audioCache: Map<string, string> = new Map();
+  private pendingRequests: Map<string, Promise<string>> = new Map();
+  private playId: number = 0;
+
   constructor() {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       this.synth = window.speechSynthesis;
@@ -38,8 +54,8 @@ class AudioService implements VoiceService {
 
   public setEnabled(val: boolean) {
     this.enabled = val;
-    if (!val && this.synth) {
-      this.synth.cancel();
+    if (!val) {
+      this.stop();
     }
   }
 
@@ -48,8 +64,22 @@ class AudioService implements VoiceService {
   }
 
   public stop(): void {
+    this.playId++;
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+      } catch {
+        // audio element pause fallback
+      }
+      this.currentAudio = null;
+    }
     if (this.synth) {
-      this.synth.cancel();
+      try {
+        this.synth.cancel();
+      } catch {
+        // synth cancel fallback
+      }
     }
     this.onSpeakingCallback?.(false);
   }
@@ -58,7 +88,9 @@ class AudioService implements VoiceService {
   public playClick() {
     if (!this.enabled || typeof window === "undefined") return;
     try {
-      const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtxClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtxClass) return;
 
       if (!this.audioCtx || this.audioCtx.state === "suspended") {
@@ -77,7 +109,9 @@ class AudioService implements VoiceService {
     if (!this.enabled || typeof window === "undefined") return;
 
     try {
-      const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtxClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtxClass) return;
 
       if (!this.audioCtx || this.audioCtx.state === "suspended") {
@@ -137,11 +171,106 @@ class AudioService implements VoiceService {
   }
 
   /**
-   * AI voice accompaniment in Russian for button clicks and screen transitions
+   * Fetch ElevenLabs audio from deployed Supabase Edge Function `medication-voice`
    */
-  public speak(text: string): Promise<void> {
+  private async getAudioUrl(text: string): Promise<string> {
+    const trimmed = text.trim();
+    if (this.audioCache.has(trimmed)) {
+      return this.audioCache.get(trimmed)!;
+    }
+
+    if (this.pendingRequests.has(trimmed)) {
+      return this.pendingRequests.get(trimmed)!;
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        const res = await fetch(VOICE_FUNCTION_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(SUPABASE_ANON_KEY ? { Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+          },
+          body: JSON.stringify({ text: trimmed }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Voice Edge Function returned HTTP ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        if (typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+          const objectUrl = URL.createObjectURL(blob);
+          this.audioCache.set(trimmed, objectUrl);
+          return objectUrl;
+        }
+        throw new Error("URL.createObjectURL not supported");
+      } finally {
+        this.pendingRequests.delete(trimmed);
+      }
+    })();
+
+    this.pendingRequests.set(trimmed, fetchPromise);
+    return fetchPromise;
+  }
+
+  /**
+   * Play ElevenLabs audio element with lifecycle callbacks
+   */
+  private playAudioElement(audioUrl: string, expectedPlayId: number): Promise<void> {
     return new Promise((resolve) => {
-      if (!this.enabled || !this.synth) {
+      if (typeof Audio === "undefined" || this.playId !== expectedPlayId || !this.enabled) {
+        resolve();
+        return;
+      }
+
+      try {
+        const audio = new Audio(audioUrl);
+        this.currentAudio = audio;
+        let finished = false;
+
+        const cleanup = () => {
+          if (!finished) {
+            finished = true;
+            this.onSpeakingCallback?.(false);
+            if (this.currentAudio === audio) {
+              this.currentAudio = null;
+            }
+            resolve();
+          }
+        };
+
+        audio.onplay = () => {
+          if (this.playId === expectedPlayId) {
+            this.onSpeakingCallback?.(true);
+          }
+        };
+
+        audio.onended = cleanup;
+        audio.onerror = () => {
+          cleanup();
+        };
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn("[AudioService] HTMLAudio play() prevented by browser policy:", err);
+            cleanup();
+          });
+        }
+      } catch (e) {
+        console.warn("[AudioService] Error initializing Audio element:", e);
+        resolve();
+      }
+    });
+  }
+
+  /**
+   * Web Speech API fallback when ElevenLabs or network is unavailable
+   */
+  private speakWebSpeech(text: string, expectedPlayId: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.enabled || !this.synth || this.playId !== expectedPlayId) {
         resolve();
         return;
       }
@@ -150,7 +279,7 @@ class AudioService implements VoiceService {
         if (this.synth.paused) {
           this.synth.resume();
         }
-        this.synth.cancel(); // Stop prior utterance immediately so new button speaks instantly
+        this.synth.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = "ru-RU";
@@ -158,7 +287,9 @@ class AudioService implements VoiceService {
         utterance.pitch = 1.0;
 
         utterance.onstart = () => {
-          this.onSpeakingCallback?.(true);
+          if (this.playId === expectedPlayId) {
+            this.onSpeakingCallback?.(true);
+          }
         };
         utterance.onend = () => {
           this.onSpeakingCallback?.(false);
@@ -183,6 +314,36 @@ class AudioService implements VoiceService {
         resolve();
       }
     });
+  }
+
+  /**
+   * Spoken voice guidance in Russian.
+   * Priority: ElevenLabs AI voice (via Supabase Edge Function `medication-voice`) -> Web Speech API fallback.
+   */
+  public async speak(text: string): Promise<void> {
+    if (!this.enabled || !text || !text.trim()) {
+      return;
+    }
+
+    // Immediately stop prior speech so the new announcement plays without overlap
+    this.stop();
+    const currentPlayId = ++this.playId;
+
+    try {
+      const audioUrl = await this.getAudioUrl(text);
+
+      // Verify utterance wasn't cancelled or superseded while downloading audio
+      if (this.playId !== currentPlayId || !this.enabled) {
+        return;
+      }
+
+      await this.playAudioElement(audioUrl, currentPlayId);
+    } catch (err) {
+      console.warn("[AudioService] ElevenLabs TTS unavailable, falling back to Web Speech:", err);
+      if (this.playId === currentPlayId && this.enabled) {
+        await this.speakWebSpeech(text, currentPlayId);
+      }
+    }
   }
 }
 

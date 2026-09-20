@@ -15,7 +15,6 @@ export const ScheduleView: React.FC = () => {
     events,
     medications,
     setActiveScreen,
-    nextMedicationInfo,
     speak,
   } = useMedication();
 
@@ -70,7 +69,6 @@ export const ScheduleView: React.FC = () => {
           events.map((event) => {
             const med = medications.find((m) => m.id === event.medicationId);
             const statusInfo = getStatusLabel(event.status);
-            const isNext = nextMedicationInfo && nextMedicationInfo.time === event.timeString && event.status !== "confirmed_taken";
             const medName = med?.name || "Лекарство";
             const medDosage = med?.dosage || "";
             const relationLabel = med?.relationToFood ? FOOD_LABELS[med.relationToFood] : "";
@@ -78,7 +76,7 @@ export const ScheduleView: React.FC = () => {
             return (
               <article
                 key={event.id}
-                className={`schedule-card ${isNext ? "is-next" : ""}`}
+                className="schedule-card"
                 onClick={() => handleCardClick(event.id, medName, medDosage, event.timeString, relationLabel)}
                 style={{ cursor: "pointer" }}
               >
@@ -108,12 +106,6 @@ export const ScheduleView: React.FC = () => {
                     <p className="schedule-med-notes">{med.instructions}</p>
                   )}
                 </div>
-
-                {isNext && (
-                  <div style={{ marginTop: 8, fontSize: 16, fontWeight: 800, color: "#64FF00" }}>
-                    ★ Следующий приём по расписанию
-                  </div>
-                )}
               </article>
             );
           })

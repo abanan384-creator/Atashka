@@ -41,13 +41,11 @@ export const AICallModal: React.FC = () => {
   const medDosage = med?.dosage || "";
 
   const handleConfirm = () => {
-    speak("Спасибо! Отмечаю приём лекарства. Будьте здоровы!");
     confirmMedicationTaken(aiCallEvent.id);
     dismissAICall();
   };
 
   const handleSnooze = () => {
-    speak("Хорошо, напомню через пять минут.");
     snoozeMedicationReminder(aiCallEvent.id);
     dismissAICall();
   };

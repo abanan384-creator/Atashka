@@ -4,16 +4,11 @@ import { useMedication } from "../context/useMedication";
 import { DemoControls } from "./DemoControls";
 
 export const HomeView: React.FC = () => {
-  const { openMedicationFlow, setActiveScreen, nextMedicationInfo, speak, activeReminderEvent } =
-    useMedication();
+  const { openMedicationFlow, setActiveScreen, speak, activeReminderEvent } = useMedication();
   const [showDemoToolbar, setShowDemoToolbar] = useState(false);
 
-  const nextTimeDisplay = nextMedicationInfo
-    ? `Следующий приём: ${nextMedicationInfo.time}`
-    : "Все приёмы на сегодня завершены";
-
   const handleOpenSchedule = () => {
-    speak(`Расписание приёма лекарств. ${nextTimeDisplay}`);
+    speak("Расписание приёма лекарств.");
     setActiveScreen("schedule");
   };
 
@@ -37,7 +32,7 @@ export const HomeView: React.FC = () => {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 22,
+          gap: 24,
           flex: 1,
           justifyContent: "center",
           maxWidth: 640,
@@ -62,7 +57,7 @@ export const HomeView: React.FC = () => {
             <div className="btn-intake-content">
               <span className="btn-intake-title">ЗВЕНИТ БУДИЛЬНИК!</span>
               <span className="btn-intake-sub">
-                Пора принять: {nextMedicationInfo?.medicationName || "лекарство"}
+                Пора принять назначенное лекарство
               </span>
             </div>
           </button>
@@ -74,17 +69,14 @@ export const HomeView: React.FC = () => {
           className="btn-schedule-action"
           style={{ minHeight: 140 }}
           onClick={handleOpenSchedule}
-          aria-label={`Расписание приёма лекарств. ${nextTimeDisplay}`}
+          aria-label="Расписание приёма лекарств"
         >
           <div className="btn-schedule-icon-wrap" aria-hidden="true">
             <Calendar size={44} />
           </div>
           <div className="btn-schedule-content">
-            <span className="btn-schedule-title" style={{ fontSize: 26 }}>
+            <span className="btn-schedule-title" style={{ fontSize: 28 }}>
               РАСПИСАНИЕ ПРИЁМА ЛЕКАРСТВ
-            </span>
-            <span className="btn-schedule-next-badge" style={{ fontSize: 19 }}>
-              {nextTimeDisplay}
             </span>
           </div>
         </button>
@@ -101,7 +93,7 @@ export const HomeView: React.FC = () => {
             <Brain size={44} />
           </div>
           <div className="btn-game-content">
-            <span className="btn-game-title" style={{ fontSize: 26 }}>
+            <span className="btn-game-title" style={{ fontSize: 28 }}>
               ИГРА
             </span>
             <span className="btn-game-sub" style={{ fontSize: 19 }}>

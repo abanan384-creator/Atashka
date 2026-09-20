@@ -81,6 +81,7 @@ export const GameView: React.FC = () => {
               speak("Поздравляем! Все пары найдены. Прекрасная память!");
               notifyGuardian({
                 guardianLinkId: guardianLinkId || undefined,
+                userId: userProfile?.id || undefined,
                 type: "game_completed",
                 seniorName: userProfile?.name,
               }).catch((err) => console.warn("[GuardianNotification] game_completed failed:", err));

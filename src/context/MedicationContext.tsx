@@ -20,7 +20,7 @@ import {
   notifyGuardian,
   getActiveGuardianLinkId,
   setActiveGuardianLinkId,
-  checkGuardianConnection,
+  checkGuardianStatus,
 } from "../services/guardianNotifications";
 import { MedicationContext } from "./useMedication";
 
@@ -29,37 +29,42 @@ const INITIAL_DEMO_MEDICATIONS: Medication[] = [
   {
     id: "med-demo-1",
     name: "Парацетамол",
-    dosage: "1 таблетка",
+    dosage: "500 мг",
     relationToFood: "after_food",
-    instructions: "После еды, запить водой",
-    color: "#64FF00",
+    instructions: "Принимать после еды, запивая водой",
   },
   {
     id: "med-demo-2",
-    name: "Витамин D",
-    dosage: "2 капли",
+    name: "Витамин D3",
+    dosage: "2000 МЕ",
     relationToFood: "with_food",
-    instructions: "Во время еды",
-    color: "#3B82F6",
+    instructions: "Во время завтрака",
   },
 ];
 
-function createTodayEventsFromMeds(meds: Medication[], timesMap?: Record<string, string[]>): MedicationEvent[] {
+function getDemoEvents(meds: Medication[]): MedicationEvent[] {
   const now = new Date();
-  const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const todayDateStr = `${y}-${m}-${d}`;
+
   const events: MedicationEvent[] = [];
+  const scheduleTimes = ["09:00", "14:00", "20:00"];
 
   meds.forEach((med, idx) => {
-    const times = timesMap?.[med.id] || (idx === 0 ? ["08:00", "20:00"] : ["13:00"]);
-    times.forEach((t, tIdx) => {
-      events.push({
-        id: `ev-${med.id}-${tIdx}`,
-        medicationId: med.id,
-        scheduledAt: `${todayDateStr}T${t}:00`,
-        timeString: t,
-        status: "scheduled",
-        cycleCount: 0,
-      });
+    const time = scheduleTimes[idx % scheduleTimes.length];
+    const [hh, mm] = time.split(":").map(Number);
+    const doseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0);
+
+    events.push({
+      id: `event-${todayDateStr}-${med.id}-${time}`,
+      medicationId: med.id,
+      scheduledAt: doseDate.toISOString(),
+      timeString: time,
+      status: "scheduled",
+      cycleCount: 0,
+      isRepeatedReminder: false,
     });
   });
 
@@ -99,40 +104,27 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           if (isToday) {
             return parsed;
           }
-          // Roll over to today's date
-          return parsed.map((e) => ({
-            ...e,
-            scheduledAt: `${todayDateStr}T${e.timeString}:00`,
-            status: "scheduled",
-            cycleCount: 0,
-            confirmedAt: undefined,
-            snoozedUntil: undefined,
-          }));
         }
       }
     } catch {}
 
-    return createTodayEventsFromMeds(INITIAL_DEMO_MEDICATIONS);
+    return getDemoEvents(medications);
   });
 
-  // 4. Active Screen determination based on onboarding status
+  // 4. Navigation & screens
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>(() => {
     try {
-      const savedProfile = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-      if (savedProfile) {
-        const parsed: LocalUserProfile = JSON.parse(savedProfile);
-        if (parsed.onboardingCompleted) {
-          return "home";
-        }
-        if (parsed.name) {
-          return "onboarding_scan";
-        }
+      const saved = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+      if (saved) {
+        const p: LocalUserProfile = JSON.parse(saved);
+        if (p.onboardingCompleted) return "home";
+        return "onboarding_scan";
       }
     } catch {}
     return "onboarding_name";
   });
 
-  // 5. Prescription scanning & AI parsing state
+  // 5. Onboarding prescription scanning
   const [parsedMedications, setParsedMedications] = useState<ParsedMedication[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PRESCRIPTION_SCAN);
@@ -143,29 +135,26 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-  // 6. Currently active reminder event (if any)
+  // 6. Active reminder modal
   const [activeReminderId, setActiveReminderId] = useState<string | null>(() => {
     try {
-      return localStorage.getItem(STORAGE_KEYS.ACTIVE_EVENT_ID);
+      return localStorage.getItem(STORAGE_KEYS.ACTIVE_EVENT_ID) || null;
     } catch {
       return null;
     }
   });
 
-  // 7. AI Call Modal event
-  const [aiCallEventId, setAiCallEventId] = useState<string | null>(null);
-
-  // 8. Demo mode toggle (accelerates snooze from 5 min to 6 sec for hackathon reviewers)
+  // 7. Demo mode for quick reviewer testing
   const [demoMode, setDemoModeState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.DEMO_MODE_ENABLED);
-      return saved !== null ? JSON.parse(saved) : true; // Default ON for smooth hackathon testing
+      return saved !== null ? JSON.parse(saved) : true;
     } catch {
       return true;
     }
   });
 
-  // 9. Audio guidance
+  // 8. Sound & vocal prompts
   const [audioEnabled, setAudioEnabledState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.AUDIO_ENABLED);
@@ -176,7 +165,10 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   });
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
 
-  // 10. Game resume state
+  // 9. AI Voice Call (Safety escalation placeholder)
+  const [aiCallEventId, setAiCallEventId] = useState<string | null>(null);
+
+  // 10. Game interruption & resume tracking (Rule #6 & #18)
   const [savedGameResumeState, setSavedGameResumeState] = useState<boolean>(false);
 
   // 11. Guardian / Telegram connection state
@@ -186,16 +178,40 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [guardianConnected, setGuardianConnected] = useState<boolean>(false);
 
   const refreshGuardianStatus = useCallback(async () => {
-    const status = await checkGuardianConnection(guardianLinkId || undefined);
+    const status = await checkGuardianStatus(guardianLinkId || undefined, userProfile?.id);
     setGuardianConnected(status.connected);
-  }, [guardianLinkId]);
+    if (status.connected && status.telegramFirstName && userProfile) {
+      setUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              guardianConnected: true,
+              guardianFirstName: status.telegramFirstName,
+              guardianLinkId: status.guardianLinkId || prev.guardianLinkId,
+            }
+          : null
+      );
+    }
+  }, [guardianLinkId, userProfile]);
 
   useEffect(() => {
     let isMounted = true;
-    checkGuardianConnection(guardianLinkId || undefined)
+    checkGuardianStatus(guardianLinkId || undefined, userProfile?.id)
       .then((status) => {
         if (isMounted) {
           setGuardianConnected(status.connected);
+          if (status.connected && status.telegramFirstName && userProfile) {
+            setUserProfile((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    guardianConnected: true,
+                    guardianFirstName: status.telegramFirstName,
+                    guardianLinkId: status.guardianLinkId || prev.guardianLinkId,
+                  }
+                : null
+            );
+          }
         }
       })
       .catch(() => {});
@@ -203,7 +219,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return () => {
       isMounted = false;
     };
-  }, [guardianLinkId]);
+  }, [guardianLinkId, userProfile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setGuardianLinkId = useCallback((id: string | null) => {
     setGuardianLinkIdState(id);
@@ -211,8 +227,22 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (userProfile) {
       setUserProfile((prev) => (prev ? { ...prev, guardianLinkId: id || undefined } : null));
     }
-    checkGuardianConnection(id || undefined)
-      .then((s) => setGuardianConnected(s.connected))
+    checkGuardianStatus(id || undefined, userProfile?.id)
+      .then((s) => {
+        setGuardianConnected(s.connected);
+        if (s.connected && s.telegramFirstName && userProfile) {
+          setUserProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  guardianConnected: true,
+                  guardianFirstName: s.telegramFirstName,
+                  guardianLinkId: id || prev.guardianLinkId,
+                }
+              : null
+          );
+        }
+      })
       .catch(() => {});
   }, [userProfile]);
 
@@ -465,17 +495,25 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // ==========================================
 
   const saveUserName = useCallback((name: string) => {
+    const stableId =
+      userProfile?.id && userProfile.id.length >= 10
+        ? userProfile.id
+        : crypto.randomUUID();
+
     const profile: LocalUserProfile = {
-      id: `user-${Date.now()}`,
+      id: stableId,
       name,
-      createdAt: new Date().toISOString(),
+      createdAt: userProfile?.createdAt || new Date().toISOString(),
       onboardingCompleted: false,
       guardianLinkId: guardianLinkId || undefined,
+      guardianConnected,
+      guardianFirstName: userProfile?.guardianFirstName,
     };
     setUserProfile(profile);
-    setActiveScreen("onboarding_scan");
+    localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+    setActiveScreen("onboarding_guardian_choice");
     audioService.playChime("confirm");
-  }, [guardianLinkId]);
+  }, [userProfile, guardianLinkId, guardianConnected]);
 
   const uploadPrescriptionImage = useCallback(async (file: File | Blob | string) => {
     setIsAnalyzing(true);
@@ -490,33 +528,37 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       try {
         localStorage.setItem(STORAGE_KEYS.PRESCRIPTION_SCAN, JSON.stringify(parsed));
       } catch {}
-    } catch {
+    } catch (err: unknown) {
       setIsAnalyzing(false);
-      setAnalysisError("Не удалось прочитать назначение");
-      audioService.playChime("snooze");
+      const msg = err instanceof Error ? err.message : "Не удалось прочитать рецепт";
+      setAnalysisError(msg);
+      audioService.playChime("reminder");
     }
   }, []);
 
   const confirmExtractedSchedule = useCallback((confirmedMeds: ParsedMedication[]) => {
-    const now = new Date();
-    const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
-    const newMeds: Medication[] = confirmedMeds.map((m, idx) => ({
+    const newMeds: Medication[] = confirmedMeds.map((pm, idx) => ({
       id: `med-${Date.now()}-${idx}`,
-      name: m.name,
-      dosage: m.dosage || "1 доза",
-      relationToFood: m.relationToFood || "after_food",
-      instructions: m.instructions || "По назначению врача",
-      color: idx % 2 === 0 ? "#64FF00" : "#3B82F6",
+      name: pm.name,
+      dosage: pm.dosage || "1 доза",
+      relationToFood: pm.relationToFood || "unknown",
+      instructions: pm.instructions || "",
     }));
 
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    const todayDateStr = `${y}-${m}-${d}`;
+
     const newEvents: MedicationEvent[] = [];
-    newMeds.forEach((med, mIdx) => {
-      const source = confirmedMeds[mIdx];
-      source.times.forEach((timeStr, tIdx) => {
+    confirmedMeds.forEach((pm, idx) => {
+      const medId = newMeds[idx].id;
+      const times = pm.times && pm.times.length > 0 ? pm.times : ["08:00"];
+      times.forEach((timeStr) => {
         newEvents.push({
-          id: `ev-${Date.now()}-${mIdx}-${tIdx}`,
-          medicationId: med.id,
+          id: `ev-${todayDateStr}-${medId}-${timeStr}`,
+          medicationId: medId,
           scheduledAt: `${todayDateStr}T${timeStr}:00`,
           timeString: timeStr,
           status: "scheduled",
@@ -535,16 +577,19 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Telegram Guardian Notification (Requirement 5: schedule_updated)
     notifyGuardian({
       guardianLinkId: guardianLinkId || undefined,
+      userId: userProfile?.id || undefined,
       type: "schedule_updated",
       seniorName: userProfile?.name,
     }).catch((err) => console.warn("[GuardianNotification] Failed to send schedule_updated:", err));
-  }, [guardianLinkId, userProfile?.name]);
+  }, [guardianLinkId, userProfile?.id, userProfile?.name]);
 
   const finishOnboarding = useCallback(() => {
     setUserProfile((prev) => {
-      const updated = prev
+      const stableId = prev?.id && prev.id.length >= 10 ? prev.id : crypto.randomUUID();
+      const updated: LocalUserProfile = prev
         ? { ...prev, onboardingCompleted: true }
-        : { id: "user-1", name: "Анна", createdAt: new Date().toISOString(), onboardingCompleted: true };
+        : { id: stableId, name: "Пользователь", createdAt: new Date().toISOString(), onboardingCompleted: true };
+      localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(updated));
       return updated;
     });
     setActiveScreen("home");
@@ -619,13 +664,14 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (targetEvent && med) {
       notifyGuardian({
         guardianLinkId: guardianLinkId || undefined,
+        userId: userProfile?.id || undefined,
         type: "medication_taken",
         seniorName: userProfile?.name,
         medication: med.name,
         time: targetEvent.timeString,
       }).catch((err) => console.warn("[GuardianNotification] Failed to send medication_taken:", err));
     }
-  }, [events, medications, guardianLinkId, userProfile?.name]);
+  }, [events, medications, guardianLinkId, userProfile?.id, userProfile?.name]);
 
   // 3. Action: "НЕТ, Я НЕ ПРИНЯЛ" (snooze for 5 minutes)
   const snoozeMedicationReminder = useCallback((eventId: string) => {
@@ -677,13 +723,14 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (targetEvent && med) {
       notifyGuardian({
         guardianLinkId: guardianLinkId || undefined,
+        userId: userProfile?.id || undefined,
         type: "medication_snoozed",
         seniorName: userProfile?.name,
         medication: med.name,
         time: targetEvent.timeString,
       }).catch((err) => console.warn("[GuardianNotification] Failed to send medication_snoozed:", err));
     }
-  }, [demoMode, activateReminder, events, medications, guardianLinkId, userProfile?.name]);
+  }, [demoMode, activateReminder, events, medications, guardianLinkId, userProfile?.id, userProfile?.name]);
 
   // Action: Trigger immediate reminder for testing
   const triggerImmediateReminder = useCallback((eventId?: string) => {
@@ -704,6 +751,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (targetEvent && med && (targetEvent.isRepeatedReminder || targetEvent.cycleCount > 0)) {
         notifyGuardian({
           guardianLinkId: guardianLinkId || undefined,
+          userId: userProfile?.id || undefined,
           type: "medication_unconfirmed",
           seniorName: userProfile?.name,
           medication: med.name,
@@ -725,7 +773,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setActiveReminderId(null);
       reminderEngine.clearLastTriggered();
     }
-  }, [activeReminderId, events, medications, guardianLinkId, userProfile?.name]);
+  }, [activeReminderId, events, medications, guardianLinkId, userProfile?.id, userProfile?.name]);
 
   // Action: Trigger AI Call simulation
   const triggerAICall = useCallback((eventId?: string) => {
@@ -745,6 +793,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (targetEvent && med && targetEvent.status !== "confirmed_taken") {
         notifyGuardian({
           guardianLinkId: guardianLinkId || undefined,
+          userId: userProfile?.id || undefined,
           type: "medication_unconfirmed",
           seniorName: userProfile?.name,
           medication: med.name,
@@ -765,7 +814,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       );
       setAiCallEventId(null);
     }
-  }, [aiCallEventId, events, medications, guardianLinkId, userProfile?.name]);
+  }, [aiCallEventId, events, medications, guardianLinkId, userProfile?.id, userProfile?.name]);
 
   // Action: Reset all data and restart flow
   const resetAllData = useCallback(() => {
@@ -775,10 +824,13 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     setUserProfile(null);
     setMedications(INITIAL_DEMO_MEDICATIONS);
-    setEvents(createTodayEventsFromMeds(INITIAL_DEMO_MEDICATIONS));
+    setEvents(getDemoEvents(INITIAL_DEMO_MEDICATIONS));
     setParsedMedications([]);
     setActiveReminderId(null);
     setAiCallEventId(null);
+    setGuardianLinkIdState(null);
+    setGuardianConnected(false);
+    setActiveGuardianLinkId(null);
     setActiveScreen("onboarding_name");
     setSavedGameResumeState(false);
     reminderEngine.stop();
@@ -789,6 +841,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       localStorage.removeItem(STORAGE_KEYS.ACTIVE_EVENT_ID);
       localStorage.removeItem(STORAGE_KEYS.MEDICATIONS);
       localStorage.removeItem(STORAGE_KEYS.EVENTS);
+      localStorage.removeItem(STORAGE_KEYS.GUARDIAN_LINK_ID);
     } catch {}
 
     audioService.playChime("reminder");
