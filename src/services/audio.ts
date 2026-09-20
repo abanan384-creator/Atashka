@@ -10,7 +10,8 @@ const SUPABASE_URL =
   "https://znsjrujhsadiywsimywf.supabase.co";
 
 const SUPABASE_ANON_KEY =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_ANON_KEY) || "";
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpuc2pydWpoc2FkaXl3c2lteXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk4NzA3MjcsImV4cCI6MjEwNTQ0NjcyN30.q4vuEiKKdgEbwkWV1tp-pGNqfAgtz4yQKx4UJukoLk0";
 
 const VOICE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/medication-voice`;
 
