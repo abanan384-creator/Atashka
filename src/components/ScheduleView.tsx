@@ -16,7 +16,6 @@ export const ScheduleView: React.FC = () => {
     medications,
     setActiveScreen,
     nextMedicationInfo,
-    triggerImmediateReminder,
     speak,
   } = useMedication();
 
@@ -41,11 +40,9 @@ export const ScheduleView: React.FC = () => {
     setActiveScreen("home");
   };
 
-  const handleCardClick = (eventId: string, medName: string, dosage: string, time: string, status: MedicationEventStatus) => {
-    speak(`Лекарство: ${medName}. Дозировка: ${dosage}. Время приёма: ${time}.`);
-    if (status !== "confirmed_taken") {
-      triggerImmediateReminder(eventId);
-    }
+  const handleCardClick = (_eventId: string, medName: string, dosage: string, time: string, relationLabel: string) => {
+    const foodStr = relationLabel ? `, ${relationLabel}` : "";
+    speak(`Лекарство: ${medName}. Дозировка: ${dosage}. Время приёма: ${time}${foodStr}. Приём отмечается по сигналу будильника.`);
   };
 
   return (
@@ -82,8 +79,8 @@ export const ScheduleView: React.FC = () => {
               <article
                 key={event.id}
                 className={`schedule-card ${isNext ? "is-next" : ""}`}
-                onClick={() => handleCardClick(event.id, medName, medDosage, event.timeString, event.status)}
-                style={{ cursor: event.status !== "confirmed_taken" ? "pointer" : "default" }}
+                onClick={() => handleCardClick(event.id, medName, medDosage, event.timeString, relationLabel)}
+                style={{ cursor: "pointer" }}
               >
                 <div className="schedule-card-header">
                   <div className="schedule-time-badge">
@@ -113,8 +110,8 @@ export const ScheduleView: React.FC = () => {
                 </div>
 
                 {isNext && (
-                  <div style={{ marginTop: 8, fontSize: 15, fontWeight: 700, color: "#64FF00" }}>
-                    ★ Следующий приём (нажмите для перехода)
+                  <div style={{ marginTop: 8, fontSize: 16, fontWeight: 800, color: "#64FF00" }}>
+                    ★ Следующий приём по расписанию
                   </div>
                 )}
               </article>

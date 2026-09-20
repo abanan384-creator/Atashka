@@ -85,12 +85,33 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return INITIAL_DEMO_MEDICATIONS;
   });
 
-  // 3. Events
+  // 3. Events (Today's daily schedule)
   const [events, setEvents] = useState<MedicationEvent[]>(() => {
+    const now = new Date();
+    const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.EVENTS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: MedicationEvent[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const isToday = parsed.some((e) => e.scheduledAt?.startsWith(todayDateStr));
+          if (isToday) {
+            return parsed;
+          }
+          // Roll over to today's date
+          return parsed.map((e) => ({
+            ...e,
+            scheduledAt: `${todayDateStr}T${e.timeString}:00`,
+            status: "scheduled",
+            cycleCount: 0,
+            confirmedAt: undefined,
+            snoozedUntil: undefined,
+          }));
+        }
+      }
     } catch {}
+
     return createTodayEventsFromMeds(INITIAL_DEMO_MEDICATIONS);
   });
 
@@ -261,20 +282,71 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     audioService.setEnabled(audioEnabled);
   }, [audioEnabled]);
 
-  // Derive next medication info for HomeView
+  // Real-time clock tick to keep nextMedicationInfo dynamically up-to-date
+  const [currentMinuteTimestamp, setCurrentMinuteTimestamp] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCurrentMinuteTimestamp(Date.now());
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Derive next medication info for HomeView and ScheduleView
   const nextMedicationInfo = useMemo(() => {
-    const pendingEvent = events.find(
-      (e) => e.status === "reminder_active" || e.status === "snoozed" || e.status === "scheduled" || e.status === "confirmation_unknown"
+    if (!events || events.length === 0) return null;
+
+    // Chronologically sorted events by time of day
+    const sorted = [...events].sort((a, b) => a.timeString.localeCompare(b.timeString));
+
+    // 1. If any event is actively ringing (reminder_active) or snoozed right now, that is the immediate intake
+    const activeOrSnoozed = sorted.find(
+      (e) => e.status === "reminder_active" || e.status === "snoozed"
+    );
+    if (activeOrSnoozed) {
+      const med = medications.find((m) => m.id === activeOrSnoozed.medicationId);
+      return {
+        time: activeOrSnoozed.timeString,
+        medicationName: med ? med.name : "Лекарство",
+        isDueNow: true,
+      };
+    }
+
+    // 2. Real-time comparison with current clock (HH:mm)
+    const now = new Date(currentMinuteTimestamp);
+    const currentHours = String(now.getHours()).padStart(2, "0");
+    const currentMinutes = String(now.getMinutes()).padStart(2, "0");
+    const currentTimeStr = `${currentHours}:${currentMinutes}`;
+
+    // Find the next upcoming scheduled intake TODAY that hasn't been confirmed yet
+    const upcomingToday = sorted.find(
+      (e) => e.timeString >= currentTimeStr && e.status !== "confirmed_taken"
     );
 
-    if (!pendingEvent) return null;
+    if (upcomingToday) {
+      const med = medications.find((m) => m.id === upcomingToday.medicationId);
+      return {
+        time: upcomingToday.timeString,
+        medicationName: med ? med.name : "Лекарство",
+        isDueNow: false,
+      };
+    }
 
-    const med = medications.find((m) => m.id === pendingEvent.medicationId);
-    return {
-      time: pendingEvent.timeString,
-      medicationName: med ? med.name : "Лекарство",
-    };
-  }, [events, medications]);
+    // 3. If all scheduled intakes for today have passed or were confirmed:
+    // Display the first scheduled dose of tomorrow's routine
+    const firstDailyEvent = sorted[0];
+    if (firstDailyEvent) {
+      const med = medications.find((m) => m.id === firstDailyEvent.medicationId);
+      return {
+        time: `${firstDailyEvent.timeString} (завтра)`,
+        medicationName: med ? med.name : "Лекарство",
+        isDueNow: false,
+        isTomorrow: true,
+      };
+    }
+
+    return null;
+  }, [events, medications, currentMinuteTimestamp]);
 
   // Derive current active reminder event
   const activeReminderEvent = useMemo(() => {
