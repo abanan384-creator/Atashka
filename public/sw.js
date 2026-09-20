@@ -1,4 +1,4 @@
-const CACHE_NAME = "sma-cache-v1";
+const CACHE_NAME = "sma-cache-v2";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -7,12 +7,12 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS).catch(() => {});
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -33,14 +33,31 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  // Network-first for navigation requests (HTML) so deployments update immediately
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request).then((res) => res || caches.match("/index.html"));
+        })
+    );
+    return;
+  }
+
+  // Cache-first with network fallback for static assets
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       return (
         cachedResponse ||
         fetch(event.request).catch(() => {
-          if (event.request.mode === "navigate") {
-            return caches.match("/index.html");
-          }
+          return null;
         })
       );
     })

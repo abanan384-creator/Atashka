@@ -26,6 +26,16 @@
     }
   </style>
 
+  <script>
+    if ('caches' in window) {
+      caches.keys().then(function(keys) {
+        keys.forEach(function(k) {
+          if (k === 'sma-cache-v1') caches.delete(k);
+        });
+      });
+    }
+  </script>
+
   <!-- Шрифты -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
