@@ -656,6 +656,67 @@ button:focus-visible, a:focus-visible {
   font-size: 17px;
 }
 
+/* Main Action: ВРЕМЯ ДО СЛЕДУЮЩЕГО ПРИЁМА (Vibrant Bright Green) */
+.btn-timer-action {
+  width: 100%;
+  min-height: 120px;
+  background: linear-gradient(135deg, #10E559 0%, #05C44B 100%);
+  color: #000000;
+  border: none;
+  border-radius: var(--radius-xl);
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  cursor: pointer;
+  box-shadow: 0 10px 28px -4px rgba(16, 229, 89, 0.45);
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.btn-timer-action:hover {
+  background: linear-gradient(135deg, #1EF865 0%, #04D850 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px -4px rgba(16, 229, 89, 0.6);
+}
+
+.btn-timer-action:active {
+  background: linear-gradient(135deg, #0ED450 0%, #049C37 100%);
+  transform: translateY(2px) scale(0.99);
+}
+
+.btn-timer-icon-wrap {
+  width: 68px;
+  height: 68px;
+  background: rgba(0, 0, 0, 0.12);
+  color: #000000;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-timer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.btn-timer-title {
+  font-family: var(--font-family-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: #000000;
+  line-height: 1.18;
+}
+
+.btn-timer-sub {
+  font-size: 17px;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.85);
+}
+
 /* Main Action 3: ИГРА (Electric Blue from mockup) */
 .btn-game-action {
   width: 100%;
