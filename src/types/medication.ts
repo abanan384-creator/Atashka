@@ -17,6 +17,7 @@ export interface LocalUserProfile {
   name: string;
   createdAt: string;
   onboardingCompleted: boolean;
+  guardianLinkId?: string;
 }
 
 export interface ParsedMedication {

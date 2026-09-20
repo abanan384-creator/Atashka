@@ -16,6 +16,12 @@ import { audioService } from "../services/audio";
 import { defaultPrescriptionAnalyzer } from "../services/prescriptionAnalyzer";
 import { reminderEngine } from "../services/reminderEngine";
 import { notificationService } from "../services/notificationService";
+import {
+  notifyGuardian,
+  getActiveGuardianLinkId,
+  setActiveGuardianLinkId,
+  checkGuardianConnection,
+} from "../services/guardianNotifications";
 import { MedicationContext } from "./useMedication";
 
 // Initial fallback medications if user resets data
@@ -151,6 +157,43 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // 10. Game resume state
   const [savedGameResumeState, setSavedGameResumeState] = useState<boolean>(false);
+
+  // 11. Guardian / Telegram connection state
+  const [guardianLinkId, setGuardianLinkIdState] = useState<string | null>(() => {
+    return getActiveGuardianLinkId();
+  });
+  const [guardianConnected, setGuardianConnected] = useState<boolean>(false);
+
+  const refreshGuardianStatus = useCallback(async () => {
+    const status = await checkGuardianConnection(guardianLinkId || undefined);
+    setGuardianConnected(status.connected);
+  }, [guardianLinkId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    checkGuardianConnection(guardianLinkId || undefined)
+      .then((status) => {
+        if (isMounted) {
+          setGuardianConnected(status.connected);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [guardianLinkId]);
+
+  const setGuardianLinkId = useCallback((id: string | null) => {
+    setGuardianLinkIdState(id);
+    setActiveGuardianLinkId(id);
+    if (userProfile) {
+      setUserProfile((prev) => (prev ? { ...prev, guardianLinkId: id || undefined } : null));
+    }
+    checkGuardianConnection(id || undefined)
+      .then((s) => setGuardianConnected(s.connected))
+      .catch(() => {});
+  }, [userProfile]);
 
   // Timers ref for snooze and reminders
   const snoozeTimersRef = useRef<Map<string, number>>(new Map());
@@ -355,11 +398,12 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       name,
       createdAt: new Date().toISOString(),
       onboardingCompleted: false,
+      guardianLinkId: guardianLinkId || undefined,
     };
     setUserProfile(profile);
     setActiveScreen("onboarding_scan");
     audioService.playChime("confirm");
-  }, []);
+  }, [guardianLinkId]);
 
   const uploadPrescriptionImage = useCallback(async (file: File | Blob | string) => {
     setIsAnalyzing(true);
@@ -415,7 +459,14 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setEvents(newEvents);
     setActiveScreen("onboarding_success");
     audioService.playChime("confirm");
-  }, []);
+
+    // Telegram Guardian Notification (Requirement 5: schedule_updated)
+    notifyGuardian({
+      guardianLinkId: guardianLinkId || undefined,
+      type: "schedule_updated",
+      seniorName: userProfile?.name,
+    }).catch((err) => console.warn("[GuardianNotification] Failed to send schedule_updated:", err));
+  }, [guardianLinkId, userProfile?.name]);
 
   const finishOnboarding = useCallback(() => {
     setUserProfile((prev) => {
@@ -466,6 +517,9 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const nowIso = new Date().toISOString();
 
+    const targetEvent = events.find((e) => e.id === eventId);
+    const med = targetEvent ? medications.find((m) => m.id === targetEvent.medicationId) : null;
+
     setEvents((prev) =>
       prev.map((e) => {
         if (e.id === eventId) {
@@ -487,7 +541,19 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     audioService.playChime("confirm");
     audioService.speak(AUDIO_PHRASES.MEDICATION_TAKEN);
-  }, []);
+
+    // Telegram Guardian Notification (Requirement 2: medication_taken)
+    // Non-blocking background dispatch
+    if (targetEvent && med) {
+      notifyGuardian({
+        guardianLinkId: guardianLinkId || undefined,
+        type: "medication_taken",
+        seniorName: userProfile?.name,
+        medication: med.name,
+        time: targetEvent.timeString,
+      }).catch((err) => console.warn("[GuardianNotification] Failed to send medication_taken:", err));
+    }
+  }, [events, medications, guardianLinkId, userProfile?.name]);
 
   // 3. Action: "НЕТ, Я НЕ ПРИНЯЛ" (snooze for 5 minutes)
   const snoozeMedicationReminder = useCallback((eventId: string) => {
@@ -503,6 +569,9 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       window.clearTimeout(existingTimer);
       timers.delete(eventId);
     }
+
+    const targetEvent = events.find((e) => e.id === eventId);
+    const med = targetEvent ? medications.find((m) => m.id === targetEvent.medicationId) : null;
 
     setEvents((prev) =>
       prev.map((e) => {
@@ -530,7 +599,19 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       activateReminder(eventId, true);
     }, snoozeDurationMs);
     timers.set(eventId, timerId);
-  }, [demoMode, activateReminder]);
+
+    // Telegram Guardian Notification (Requirement 3: medication_snoozed)
+    // Non-blocking background dispatch
+    if (targetEvent && med) {
+      notifyGuardian({
+        guardianLinkId: guardianLinkId || undefined,
+        type: "medication_snoozed",
+        seniorName: userProfile?.name,
+        medication: med.name,
+        time: targetEvent.timeString,
+      }).catch((err) => console.warn("[GuardianNotification] Failed to send medication_snoozed:", err));
+    }
+  }, [demoMode, activateReminder, events, medications, guardianLinkId, userProfile?.name]);
 
   // Action: Trigger immediate reminder for testing
   const triggerImmediateReminder = useCallback((eventId?: string) => {
@@ -543,6 +624,21 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Action: Dismiss reminder modal (keeps status as confirmation_unknown, safe rule #5)
   const dismissReminderModal = useCallback(() => {
     if (activeReminderId) {
+      const targetEvent = events.find((e) => e.id === activeReminderId);
+      const med = targetEvent ? medications.find((m) => m.id === targetEvent.medicationId) : null;
+
+      // Telegram Guardian Notification (Requirement 4: medication_unconfirmed)
+      // Send alert when repeated reminder finishes without confirmation
+      if (targetEvent && med && (targetEvent.isRepeatedReminder || targetEvent.cycleCount > 0)) {
+        notifyGuardian({
+          guardianLinkId: guardianLinkId || undefined,
+          type: "medication_unconfirmed",
+          seniorName: userProfile?.name,
+          medication: med.name,
+          time: targetEvent.timeString,
+        }).catch((err) => console.warn("[GuardianNotification] Failed to send medication_unconfirmed:", err));
+      }
+
       setEvents((prev) =>
         prev.map((e) => {
           if (e.id === activeReminderId) {
@@ -557,7 +653,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setActiveReminderId(null);
       reminderEngine.clearLastTriggered();
     }
-  }, [activeReminderId]);
+  }, [activeReminderId, events, medications, guardianLinkId, userProfile?.name]);
 
   // Action: Trigger AI Call simulation
   const triggerAICall = useCallback((eventId?: string) => {
@@ -570,6 +666,20 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const dismissAICall = useCallback(() => {
     if (aiCallEventId) {
+      const targetEvent = events.find((e) => e.id === aiCallEventId);
+      const med = targetEvent ? medications.find((m) => m.id === targetEvent.medicationId) : null;
+
+      // Telegram Guardian Notification (Requirement 4: medication_unconfirmed)
+      if (targetEvent && med && targetEvent.status !== "confirmed_taken") {
+        notifyGuardian({
+          guardianLinkId: guardianLinkId || undefined,
+          type: "medication_unconfirmed",
+          seniorName: userProfile?.name,
+          medication: med.name,
+          time: targetEvent.timeString,
+        }).catch((err) => console.warn("[GuardianNotification] Failed to send medication_unconfirmed:", err));
+      }
+
       setEvents((prev) =>
         prev.map((e) => {
           if (e.id === aiCallEventId && e.status !== "confirmed_taken") {
@@ -583,7 +693,7 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       );
       setAiCallEventId(null);
     }
-  }, [aiCallEventId]);
+  }, [aiCallEventId, events, medications, guardianLinkId, userProfile?.name]);
 
   // Action: Reset all data and restart flow
   const resetAllData = useCallback(() => {
@@ -650,6 +760,10 @@ export const MedicationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         aiCallEvent,
         triggerAICall,
         dismissAICall,
+        guardianLinkId,
+        setGuardianLinkId,
+        guardianConnected,
+        refreshGuardianStatus,
         openMedicationFlow,
         confirmMedicationTaken,
         snoozeMedicationReminder,

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ArrowLeft, RotateCcw, Bell } from "lucide-react";
 import { useMedication } from "../context/useMedication";
 import { audioService } from "../services/audio";
+import { notifyGuardian } from "../services/guardianNotifications";
 
 interface CardItem {
   id: number;
@@ -20,7 +21,7 @@ const CARDS_DATA = [
 ];
 
 export const GameView: React.FC = () => {
-  const { setActiveScreen, savedGameResumeState, triggerImmediateReminder, speak } = useMedication();
+  const { setActiveScreen, savedGameResumeState, triggerImmediateReminder, speak, userProfile, guardianLinkId } = useMedication();
 
   const [cards, setCards] = useState<CardItem[]>(() =>
     CARDS_DATA.map((item, index) => ({
@@ -78,6 +79,11 @@ export const GameView: React.FC = () => {
             if (nextM === 3) {
               audioService.playChime("confirm");
               speak("Поздравляем! Все пары найдены. Прекрасная память!");
+              notifyGuardian({
+                guardianLinkId: guardianLinkId || undefined,
+                type: "game_completed",
+                seniorName: userProfile?.name,
+              }).catch((err) => console.warn("[GuardianNotification] game_completed failed:", err));
             } else {
               speak("Пара найдена! Отлично!");
             }

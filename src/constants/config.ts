@@ -22,6 +22,8 @@ export const STORAGE_KEYS = {
   GAME_STATE: "sma_game_state_v2",
   CAREGIVER_INFO: "sma_caregiver_info_v1",
   USER_REGISTERED: "sma_user_registered_v1",
+  GUARDIAN_LINK_ID: "sma_guardian_link_id_v1",
+  GUARDIAN_TELEGRAM_INFO: "sma_guardian_telegram_info_v1",
 } as const;
 
 // Audio guidance phrases

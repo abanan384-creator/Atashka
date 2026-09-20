@@ -1,8 +1,39 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { REMINDER_SNOOZE_MINUTES, DEMO_ACCELERATED_SNOOZE_SECONDS, AUDIO_PHRASES } from "../constants/config";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { REMINDER_SNOOZE_MINUTES, DEMO_ACCELERATED_SNOOZE_SECONDS, AUDIO_PHRASES, STORAGE_KEYS } from "../constants/config";
 import type { MedicationEvent, LocalUserProfile, ParsedMedication, Medication } from "../types/medication";
-import { MockPrescriptionAnalyzer } from "../services/prescriptionAnalyzer";
+import { MockPrescriptionAnalyzer, GeminiPrescriptionAnalyzer } from "../services/prescriptionAnalyzer";
 import { ReminderEngine } from "../services/reminderEngine";
+import {
+  notifyGuardian,
+  getActiveGuardianLinkId,
+  setActiveGuardianLinkId,
+  type GuardianNotificationPayload,
+} from "../services/guardianNotifications";
+import { supabase } from "../services/supabaseClient";
+
+const storageMap = new Map<string, string>();
+const localStorageMock: Storage = {
+  getItem: (key: string) => storageMap.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    storageMap.set(key, String(value));
+  },
+  removeItem: (key: string) => {
+    storageMap.delete(key);
+  },
+  clear: () => {
+    storageMap.clear();
+  },
+  key: (index: number) => Array.from(storageMap.keys())[index] ?? null,
+  get length() {
+    return storageMap.size;
+  },
+};
+if (typeof globalThis.localStorage === "undefined") {
+  Object.defineProperty(globalThis, "localStorage", {
+    value: localStorageMock,
+    writable: true,
+  });
+}
 
 describe("Senior Medication Assistant - Core Domain & Safety Rules", () => {
   let sampleEvent: MedicationEvent;
@@ -17,6 +48,7 @@ describe("Senior Medication Assistant - Core Domain & Safety Rules", () => {
       cycleCount: 0,
       isRepeatedReminder: false,
     };
+    localStorage.clear();
   });
 
   // Rule #4: Snooze interval is exactly 5 minutes
@@ -186,6 +218,13 @@ describe("Senior Medication Assistant - Core Domain & Safety Rules", () => {
     await expect(analyzer.analyze(corruptFile)).rejects.toThrow("UNREADABLE_DOCUMENT");
   });
 
+  it("GeminiPrescriptionAnalyzer gracefully catches unreadable prescription document errors", async () => {
+    const geminiAnalyzer = new GeminiPrescriptionAnalyzer();
+    const corruptFile = new File(["bad data"], "corrupt_document.png", { type: "image/png" });
+
+    await expect(geminiAnalyzer.analyze(corruptFile)).rejects.toThrow("UNREADABLE_DOCUMENT");
+  });
+
   // 4. Automatic Schedule creation from parsed medications
   it("converts parsed medications into medications and daily scheduled events without manual re-entry", () => {
     const parsedMeds: ParsedMedication[] = [
@@ -273,8 +312,6 @@ describe("Senior Medication Assistant - Core Domain & Safety Rules", () => {
   it("ReminderEngine correctly recovers overdue scheduled events after restart", () => {
     const engine = new ReminderEngine();
 
-    // User was supposed to take Paracetamol at 08:00.
-    // User opened app at 08:07.
     const events: MedicationEvent[] = [
       {
         id: "ev-overdue",
@@ -312,5 +349,205 @@ describe("Senior Medication Assistant - Core Domain & Safety Rules", () => {
     expect(result).not.toBeNull();
     expect(result?.event.id).toBe("ev-snoozed");
     expect(result?.isRepeated).toBe(true);
+  });
+
+  // GUARDIAN TELEGRAM INTEGRATION TESTS (Flows A, B, C, D, E):
+  describe("Guardian Telegram Notifications via Supabase", () => {
+    it("dynamically resolves guardianLinkId from storage and profile without hardcoding", () => {
+      // 1. Initially null if nothing set and no env
+      setActiveGuardianLinkId(null);
+
+      // 2. Resolved from localStorage
+      setActiveGuardianLinkId("link-dynamic-123");
+      expect(getActiveGuardianLinkId()).toBe("link-dynamic-123");
+
+      // 3. Resolved from user profile
+      localStorage.removeItem(STORAGE_KEYS.GUARDIAN_LINK_ID);
+      const profile: LocalUserProfile = {
+        id: "u-1",
+        name: "Елена Павловна",
+        createdAt: new Date().toISOString(),
+        onboardingCompleted: true,
+        guardianLinkId: "link-from-profile-456",
+      };
+      localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+      expect(getActiveGuardianLinkId()).toBe("link-from-profile-456");
+    });
+
+    it("Flow A: dispatches medication_taken to Supabase Edge Function with dynamic medication and time", async () => {
+      const invokeSpy = vi.spyOn(Object.getPrototypeOf(supabase.functions), "invoke").mockResolvedValue({
+        data: { ok: true, sent: true },
+        error: null,
+      });
+
+      const payload: GuardianNotificationPayload = {
+        guardianLinkId: "guardian-uuid-test",
+        type: "medication_taken",
+        seniorName: "Борис Сергеевич",
+        medication: "Кардиомагнил",
+        time: "10:30",
+      };
+
+      const result = await notifyGuardian(payload);
+
+      expect(invokeSpy).toHaveBeenCalledWith("notify-guardian", {
+        body: {
+          guardianLinkId: "guardian-uuid-test",
+          type: "medication_taken",
+          seniorName: "Борис Сергеевич",
+          medication: "Кардиомагнил",
+          time: "10:30",
+        },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.sent).toBe(true);
+      invokeSpy.mockRestore();
+    });
+
+    it("Flow B: dispatches medication_snoozed when user defers medication", async () => {
+      const invokeSpy = vi.spyOn(Object.getPrototypeOf(supabase.functions), "invoke").mockResolvedValue({
+        data: { ok: true, sent: true },
+        error: null,
+      });
+
+      const payload: GuardianNotificationPayload = {
+        guardianLinkId: "guardian-uuid-test",
+        type: "medication_snoozed",
+        seniorName: "Татьяна Николаевна",
+        medication: "Парацетамол",
+        time: "08:00",
+      };
+
+      const result = await notifyGuardian(payload);
+
+      expect(invokeSpy).toHaveBeenCalledWith("notify-guardian", {
+        body: {
+          guardianLinkId: "guardian-uuid-test",
+          type: "medication_snoozed",
+          seniorName: "Татьяна Николаевна",
+          medication: "Парацетамол",
+          time: "08:00",
+        },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.sent).toBe(true);
+      invokeSpy.mockRestore();
+    });
+
+    it("Flow C: dispatches medication_unconfirmed with safe non-accusatory wording", async () => {
+      const invokeSpy = vi.spyOn(Object.getPrototypeOf(supabase.functions), "invoke").mockResolvedValue({
+        data: { ok: true, sent: true },
+        error: null,
+      });
+
+      const payload: GuardianNotificationPayload = {
+        guardianLinkId: "guardian-uuid-test",
+        type: "medication_unconfirmed",
+        seniorName: "Иван Петрович",
+        medication: "Аспирин",
+        time: "14:00",
+      };
+
+      const result = await notifyGuardian(payload);
+
+      expect(invokeSpy).toHaveBeenCalledWith("notify-guardian", {
+        body: {
+          guardianLinkId: "guardian-uuid-test",
+          type: "medication_unconfirmed",
+          seniorName: "Иван Петрович",
+          medication: "Аспирин",
+          time: "14:00",
+        },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.sent).toBe(true);
+      invokeSpy.mockRestore();
+    });
+
+    it("Flow D: gracefully skips when no guardian is connected without throwing error", async () => {
+      setActiveGuardianLinkId(null);
+      localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+
+      const invokeSpy = vi.spyOn(Object.getPrototypeOf(supabase.functions), "invoke");
+
+      // No guardian link configured
+      const result = await notifyGuardian({
+        type: "medication_taken",
+        seniorName: "Анна",
+        medication: "Витамин C",
+        time: "09:00",
+      });
+
+      // Edge function should NOT be called when no guardian exists
+      expect(invokeSpy).not.toHaveBeenCalled();
+      expect(result.ok).toBe(true);
+      expect(result.sent).toBe(false);
+      expect(result.skipped).toBe(true);
+
+      invokeSpy.mockRestore();
+    });
+
+    it("Flow E: temporary network/API failure does not throw or crash medication flow", async () => {
+      const invokeSpy = vi.spyOn(Object.getPrototypeOf(supabase.functions), "invoke").mockRejectedValue(
+        new Error("Network timeout")
+      );
+
+      const result = await notifyGuardian({
+        guardianLinkId: "guardian-uuid-test",
+        type: "medication_taken",
+        seniorName: "Анна",
+        medication: "Парацетамол",
+        time: "08:00",
+      });
+
+      // Must not throw, returns ok: false, medication confirmation in UI continues unaffected
+      expect(result.ok).toBe(false);
+      expect(result.sent).toBe(false);
+      expect(result.error).toContain("Network timeout");
+
+      invokeSpy.mockRestore();
+    });
+
+    it("Dispatches schedule_updated and game_completed events", async () => {
+      const invokeSpy = vi.spyOn(Object.getPrototypeOf(supabase.functions), "invoke").mockResolvedValue({
+        data: { ok: true, sent: true },
+        error: null,
+      });
+
+      // schedule_updated
+      await notifyGuardian({
+        guardianLinkId: "guardian-uuid-test",
+        type: "schedule_updated",
+        seniorName: "Ольга",
+      });
+
+      expect(invokeSpy).toHaveBeenCalledWith("notify-guardian", {
+        body: {
+          guardianLinkId: "guardian-uuid-test",
+          type: "schedule_updated",
+          seniorName: "Ольга",
+        },
+      });
+
+      // game_completed
+      await notifyGuardian({
+        guardianLinkId: "guardian-uuid-test",
+        type: "game_completed",
+        seniorName: "Ольга",
+      });
+
+      expect(invokeSpy).toHaveBeenCalledWith("notify-guardian", {
+        body: {
+          guardianLinkId: "guardian-uuid-test",
+          type: "game_completed",
+          seniorName: "Ольга",
+        },
+      });
+
+      invokeSpy.mockRestore();
+    });
   });
 });

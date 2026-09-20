@@ -37,6 +37,11 @@ export interface MedicationContextType {
   aiCallEvent: MedicationEvent | null;
   triggerAICall: (eventId?: string) => void;
   dismissAICall: () => void;
+  // Guardian / Telegram safety layer
+  guardianLinkId: string | null;
+  setGuardianLinkId: (id: string | null) => void;
+  guardianConnected: boolean;
+  refreshGuardianStatus: () => Promise<void>;
   // Core Domain Actions
   openMedicationFlow: () => void;
   confirmMedicationTaken: (eventId: string) => void;

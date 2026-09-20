@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
               }
             : undefined,
         },
+        '/api/gemini': {
+          target: 'https://generativelanguage.googleapis.com/v1beta',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/gemini/, ''),
+        },
       },
     },
   }
